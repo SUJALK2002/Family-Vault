@@ -52,7 +52,9 @@ export function validateVaultFile(file, { imagesOnly = false } = {}) {
   const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_DOCUMENT_SIZE
   if (file.size > maxSize) {
     const maxSizeLabel = isImage ? '25 MB' : '100 MB'
-    throw new Error(`${isImage ? 'Images' : 'Documents'} must be ${maxSizeLabel} or smaller.`)
+    const error = new Error(`${isImage ? 'Images' : 'Documents'} must be ${maxSizeLabel} or smaller.`)
+    error.code = 'FILE_TOO_LARGE'
+    throw error
   }
 }
 

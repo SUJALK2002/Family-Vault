@@ -25,6 +25,12 @@ npm run dev -- --host 0.0.0.0
 
 Visit http://localhost:5173
 
+## Deploy to Render
+
+Create a **Static Site** on Render using this repository. The included `render.yaml` configures the build (`npm ci && npm run build`), publishes `dist`, and rewrites app routes to `index.html`. Static sites do not need a port setting; `5173` is only Vite's local development port.
+
+Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the Render service's environment settings before deploying. These values are used during the build. Use only a Supabase publishable/anon key in the frontend; never add a secret or service-role key.
+
 ## Supabase setup
 
 Copy `.env.example` to `.env` and fill in your environment values:

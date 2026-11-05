@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Link,
@@ -14,7 +14,6 @@ import {
 import {
   ArrowLeft,
   Bell,
-  Briefcase,
   ChevronRight,
   CircleDashed,
   Download,
@@ -31,7 +30,6 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Star,
   Trash2,
   Upload,
   UserCog,
@@ -63,9 +61,6 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: FolderKanban },
   { to: '/members', label: 'Family Members', icon: Users },
   { to: '/common-documents', label: 'Common Docs', icon: FolderOpen },
-  { to: '/passports', label: 'Passport Manager', icon: Briefcase },
-  { to: '/important', label: 'Important', icon: Star },
-  { to: '/search', label: 'Search', icon: Search },
   { to: '/settings', label: 'Settings', icon: UserCog },
 ]
 
@@ -90,6 +85,15 @@ function getDetectedFileType(file) {
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return 'pdf'
   if (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(file.name)) return 'image'
   return 'other'
+}
+
+function reportUploadError(error, setUploadError, prefix) {
+  const message = error.message || 'Could not save this file.'
+  if (error.code === 'FILE_TOO_LARGE') {
+    window.alert(message)
+    return
+  }
+  setUploadError(`${prefix}: ${message}`)
 }
 
 function buildStoredDocument({ file, documentName, memberId, familyId, category = 'Other', notes = '', isImportant = false }) {
@@ -231,9 +235,6 @@ function App() {
             <Route path="/members" element={<FamilyMembersPage data={vaultData} setData={commitVaultData} />} />
             <Route path="/members/:memberId" element={<MemberDetailsPage data={vaultData} setData={commitVaultData} />} />
             <Route path="/common-documents" element={<CommonDocumentsPage data={vaultData} setData={commitVaultData} />} />
-            <Route path="/passports" element={<PassportManagerPage data={vaultData} setData={commitVaultData} />} />
-            <Route path="/important" element={<ImportantDocumentsPage data={vaultData} />} />
-            <Route path="/search" element={<SearchPage data={vaultData} setData={commitVaultData} />} />
             <Route path="/settings" element={<SettingsPage data={vaultData} />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -980,6 +981,8 @@ function MemberDetailsPage({ data, setData }) {
   const [showEditor, setShowEditor] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const documentInputRef = useRef(null)
+  const photoInputRef = useRef(null)
   const [editingDocumentId, setEditingDocumentId] = useState('')
   const [editingDocumentName, setEditingDocumentName] = useState('')
   const [profilePhoto, setProfilePhoto] = useState(member?.profilePhoto || '')
@@ -1035,7 +1038,7 @@ function MemberDetailsPage({ data, setData }) {
       })
       setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
     } catch (error) {
-      setUploadError(`Upload failed: ${error.message || 'Could not save this file.'}`)
+      reportUploadError(error, setUploadError, 'Upload failed')
     } finally {
       setUploading(false)
       event.target.value = ''
@@ -1061,7 +1064,7 @@ function MemberDetailsPage({ data, setData }) {
           : entry)),
       }))
     } catch (error) {
-      setUploadError(`Photo upload failed: ${error.message || 'Could not save this image.'}`)
+      reportUploadError(error, setUploadError, 'Photo upload failed')
     } finally {
       setUploading(false)
       event.target.value = ''
@@ -1096,14 +1099,14 @@ function MemberDetailsPage({ data, setData }) {
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => setShowEditor((value) => !value)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white"><Pencil className="h-4 w-4" /> {showEditor ? 'Close Editor' : 'Edit Profile'}</button>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white">
+            <button type="button" onClick={() => documentInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white disabled:opacity-60">
               <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload Document'}
-              <input type="file" accept=".pdf,image/*" className="hidden" onChange={uploadDocument} />
-            </label>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white">
-              <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Profile Photo'}
-              <input type="file" accept="image/*" className="hidden" onChange={uploadProfilePhoto} />
-            </label>
+            </button>
+            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white disabled:opacity-60">
+              <Upload className="h-4 w-4" /> Profile Photo
+            </button>
+            <input ref={documentInputRef} type="file" accept=".pdf,image/*" className="sr-only" onChange={uploadDocument} />
+            <input ref={photoInputRef} type="file" accept="image/*" className="sr-only" onChange={uploadProfilePhoto} />
           </div>
         </div>
         {uploadError ? <p role="alert" className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uploadError}</p> : null}
@@ -1155,10 +1158,9 @@ function MemberDetailsPage({ data, setData }) {
       <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glass">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-xl font-semibold text-white">Member documents</h3>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white">
+          <button type="button" onClick={() => documentInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white disabled:opacity-60">
             <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-            <input type="file" accept=".pdf,image/*" className="hidden" onChange={uploadDocument} />
-          </label>
+          </button>
         </div>
         <div className="grid gap-3">
           {memberDocs.length ? memberDocs.map((doc) => (
@@ -1232,6 +1234,7 @@ function CommonDocumentsPage({ data, setData }) {
   const [search, setSearch] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const documentInputRef = useRef(null)
   const [editingDocumentId, setEditingDocumentId] = useState('')
   const [editingDocumentName, setEditingDocumentName] = useState('')
   const commonDocuments = data.documents.filter((document) => !document.memberId && !document.isDeleted)
@@ -1256,7 +1259,7 @@ function CommonDocumentsPage({ data, setData }) {
       })
       setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
     } catch (error) {
-      setUploadError(`Upload failed: ${error.message || 'Could not save this file.'}`)
+      reportUploadError(error, setUploadError, 'Upload failed')
     } finally {
       setUploading(false)
       event.target.value = ''
@@ -1287,10 +1290,10 @@ function CommonDocumentsPage({ data, setData }) {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" placeholder="Search common docs" />
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white">
+            <button type="button" onClick={() => documentInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
               <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-              <input type="file" accept=".pdf,image/*" className="hidden" onChange={uploadDocument} />
-            </label>
+            </button>
+            <input ref={documentInputRef} type="file" accept=".pdf,image/*" className="sr-only" onChange={uploadDocument} />
           </div>
         </div>
         {uploadError ? <p role="alert" className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uploadError}</p> : null}
@@ -1329,300 +1332,6 @@ function CommonDocumentsPage({ data, setData }) {
             </div>
           </div>
         ))}
-      </div>
-    </div>
-  )
-}
-
-function PassportManagerPage({ data, setData }) {
-  const [showForm, setShowForm] = useState(false)
-  const [editingPassportId, setEditingPassportId] = useState('')
-  const [editingPassportName, setEditingPassportName] = useState('')
-  const [imageUploadError, setImageUploadError] = useState('')
-  const [imageUploading, setImageUploading] = useState(false)
-  const [form, setForm] = useState({
-    memberId: data.members[0]?.id || '',
-    passportNumber: '',
-    fullName: '',
-    dateOfBirth: '',
-    nationality: '',
-    gender: '',
-    placeOfBirth: '',
-    placeOfIssue: '',
-    issueDate: '',
-    expiryDate: '',
-    passportType: '',
-    notes: '',
-    passportImage: '',
-    passportImagePath: '',
-  })
-
-  const handlePassportImage = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setImageUploadError('')
-    setImageUploading(true)
-    try {
-      validateVaultFile(file, { imagesOnly: true })
-      const image = isSupabaseConfigured
-        ? await uploadVaultFile(file, data.family.id, `passports/${form.memberId}`)
-        : { path: '', url: await fileToDataUrl(file) }
-      setForm((current) => ({ ...current, passportImage: image.url, passportImagePath: image.path }))
-    } catch (error) {
-      setImageUploadError(`Passport image upload failed: ${error.message || 'Could not save this image.'}`)
-    } finally {
-      setImageUploading(false)
-      event.target.value = ''
-    }
-  }
-
-  const handleAddPassport = (event) => {
-    event.preventDefault()
-    if (!form.memberId || !form.passportNumber || !form.expiryDate) return
-
-    const newPass = {
-      id: crypto.randomUUID(),
-      familyId: data.family.id,
-      memberId: form.memberId,
-      passportNumber: form.passportNumber,
-      fullName: form.fullName || data.members.find((member) => member.id === form.memberId)?.name || '',
-      dateOfBirth: form.dateOfBirth,
-      nationality: form.nationality,
-      gender: form.gender,
-      placeOfBirth: form.placeOfBirth,
-      placeOfIssue: form.placeOfIssue,
-      issueDate: form.issueDate,
-      expiryDate: form.expiryDate,
-      passportType: form.passportType,
-      documentId: null,
-      notes: form.notes,
-      passportImage: form.passportImage,
-      passportImagePath: form.passportImagePath,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    setData((current) => ({ ...current, passports: [...current.passports, newPass] }))
-    setForm({
-      memberId: currentMemberId(data),
-      passportNumber: '',
-      fullName: '',
-      dateOfBirth: '',
-      nationality: '',
-      gender: '',
-      placeOfBirth: '',
-      placeOfIssue: '',
-      issueDate: '',
-      expiryDate: '',
-      passportType: '',
-      notes: '',
-      passportImage: '',
-      passportImagePath: '',
-    })
-    setShowForm(false)
-  }
-
-  const savePassportName = (event, passportId) => {
-    event.preventDefault()
-    const fullName = editingPassportName.trim()
-    if (!fullName) return
-    setData((current) => ({
-      ...current,
-      passports: current.passports.map((entry) => (entry.id === passportId
-        ? { ...entry, fullName, updatedAt: new Date().toISOString() }
-        : entry)),
-    }))
-    setEditingPassportId('')
-    setEditingPassportName('')
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glass">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Passport control</p>
-            <h2 className="mt-2 text-3xl font-semibold text-white">Passport manager</h2>
-          </div>
-          <button type="button" onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add passport</button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {data.passports.map((passport) => {
-          const member = data.members.find((entry) => entry.id === passport.memberId)
-          const status = getPassportStatus(passport.expiryDate)
-          return (
-            <div key={passport.id} className="rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-glass">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-slate-200 text-slate-900">
-                  {passport.passportImage ? <img src={passport.passportImage} alt={passport.fullName} className="h-full w-full object-cover" /> : <Briefcase className="h-5 w-5" />}
-                </div>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${status.color}`}>{status.label}</span>
-              </div>
-              <div className="mt-5">
-                <p className="text-sm text-slate-400">{member ? member.name : 'Unknown member'}</p>
-                {editingPassportId === passport.id ? (
-                  <form onSubmit={(event) => savePassportName(event, passport.id)} className="mt-2 flex flex-wrap gap-2">
-                    <input autoFocus aria-label="Passport holder name" value={editingPassportName} onChange={(event) => setEditingPassportName(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-red-400" />
-                    <button type="submit" className="rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white">Save</button>
-                    <button type="button" onClick={() => setEditingPassportId('')} className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300">Cancel</button>
-                  </form>
-                ) : <h3 className="mt-1 text-xl font-semibold text-white">{passport.fullName}</h3>}
-              </div>
-              <div className="mt-5 space-y-2 text-sm text-slate-300">
-                <p>Number: {passport.passportNumber.replace(/.(?=.{4})/g, '*')}</p>
-                <p>Expires: {formatDate(passport.expiryDate)}</p>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button type="button" className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">View</button>
-                <button type="button" onClick={() => {
-                  setEditingPassportId(passport.id)
-                  setEditingPassportName(passport.fullName)
-                }} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">Edit</button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {showForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-[30px] border border-white/10 bg-[#1a1d25] p-5 shadow-glass">
-            <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-2xl font-semibold text-white">Add passport record</h3>
-              <button type="button" onClick={() => setShowForm(false)} className="rounded-xl border border-white/10 p-2 text-slate-300"><X className="h-4 w-4" /></button>
-            </div>
-            <form onSubmit={handleAddPassport} className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Passport holder</label>
-                <select value={form.memberId} onChange={(event) => setForm({ ...form, memberId: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white">
-                  {data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Passport number</label>
-                <input value={form.passportNumber} onChange={(event) => setForm({ ...form, passportNumber: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" required />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Full name as printed</label>
-                <input value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Nationality</label>
-                <input value={form.nationality} onChange={(event) => setForm({ ...form, nationality: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Date of Birth</label>
-                <input type="date" value={form.dateOfBirth} onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Gender</label>
-                <input value={form.gender} onChange={(event) => setForm({ ...form, gender: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Place of issue</label>
-                <input value={form.placeOfIssue} onChange={(event) => setForm({ ...form, placeOfIssue: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Issue date</label>
-                <input type="date" value={form.issueDate} onChange={(event) => setForm({ ...form, issueDate: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Expiry date</label>
-                <input type="date" value={form.expiryDate} onChange={(event) => setForm({ ...form, expiryDate: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" required />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Passport type</label>
-                <input value={form.passportType} onChange={(event) => setForm({ ...form, passportType: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm text-slate-300">Passport image</label>
-                <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-white/15 bg-slate-900/60 px-3 py-6 text-sm text-slate-300">
-                  {imageUploading ? 'Uploading image…' : form.passportImage ? 'Image uploaded — click to replace' : 'Upload passport photo or scan'}
-                  <input type="file" accept="image/*" className="hidden" onChange={handlePassportImage} />
-                </label>
-                {imageUploadError ? <p role="alert" className="mt-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{imageUploadError}</p> : null}
-                {form.passportImage ? <img src={form.passportImage} alt="Passport preview" className="mt-3 h-32 w-full rounded-2xl object-cover" /> : null}
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm text-slate-300">Notes</label>
-                <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" />
-              </div>
-              <div className="md:col-span-2 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowForm(false)} className="rounded-2xl border border-white/10 px-4 py-2.5 text-slate-200">Cancel</button>
-                <button type="submit" className="rounded-2xl bg-action-gradient px-4 py-2.5 font-semibold text-white">Save passport</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function ImportantDocumentsPage({ data }) {
-  const important = data.documents.filter((doc) => doc.isImportant && !doc.isDeleted)
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glass">
-        <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Marked as important</p>
-        <h2 className="mt-2 text-3xl font-semibold text-white">Important documents</h2>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {important.map((doc) => (
-          <div key={doc.id} className="rounded-[26px] border border-white/10 bg-white/5 p-4 shadow-glass">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-300">
-                <Star className="h-5 w-5 fill-current" />
-              </div>
-              <span className="rounded-full bg-red-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-red-300">Important</span>
-            </div>
-            <h3 className="text-lg font-semibold text-white">{doc.documentName}</h3>
-            <p className="mt-2 text-sm text-slate-400">{doc.category} • {doc.fileType.toUpperCase()}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function SearchPage({ data }) {
-  const [query, setQuery] = useState('')
-
-  const results = useMemo(() => {
-    if (!query.trim()) return []
-    const q = query.toLowerCase()
-
-    return [...data.documents.filter((doc) => !doc.isDeleted)].filter((document) =>
-      document.documentName.toLowerCase().includes(q) ||
-      document.category.toLowerCase().includes(q) ||
-      document.notes.toLowerCase().includes(q),
-    )
-  }, [data.documents, query])
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glass">
-        <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Search</p>
-        <h2 className="mt-2 text-3xl font-semibold text-white">Global search</h2>
-        <div className="mt-4 relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search family members, documents, categories, passports" className="w-full rounded-2xl border border-white/10 bg-slate-900/70 py-3 pl-10 pr-4 text-white" />
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {results.length ? results.map((doc) => (
-          <div key={doc.id} className="rounded-[26px] border border-white/10 bg-white/5 p-4 shadow-glass">
-            <p className="text-xs uppercase tracking-[0.22em] text-red-300">{doc.category}</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{doc.documentName}</h3>
-            <p className="mt-2 text-sm text-slate-400">{doc.fileType.toUpperCase()} • {doc.fileSize}</p>
-          </div>
-        )) : <div className="rounded-[26px] border border-dashed border-white/15 bg-slate-900/40 p-8 text-slate-300 md:col-span-2 xl:col-span-3">No matching documents found.</div>}
       </div>
     </div>
   )
@@ -1676,38 +1385,11 @@ function SettingsPage({ data }) {
   )
 }
 
-function formatDate(date) {
-  if (!date) return 'N/A'
-  return new Date(date).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
 function getGreeting() {
   const hour = new Date().getHours()
   if (hour < 12) return 'Morning'
   if (hour < 18) return 'Afternoon'
   return 'Evening'
-}
-
-function currentMemberId(data) {
-  return data.members[0]?.id || ''
-}
-
-function getPassportStatus(expiryDate) {
-  const today = new Date()
-  const deadline = new Date(expiryDate)
-  const diffDays = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24))
-
-  if (diffDays < 0) {
-    return { label: 'Expired', color: 'bg-red-500/10 text-red-300' }
-  }
-  if (diffDays <= 30) {
-    return { label: 'Expiring soon', color: 'bg-amber-500/10 text-amber-300' }
-  }
-  return { label: 'Valid', color: 'bg-emerald-500/10 text-emerald-300' }
 }
 
 export default App
