@@ -1,8 +1,9 @@
-import { supabase } from './supabase.js'
+import { supabase, supabaseUrl } from './supabase.js'
 
 const STORAGE_BUCKET = 'family-documents'
 const MAX_DOCUMENT_SIZE = 100 * 1024 * 1024
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024
+const RESUMABLE_UPLOAD_THRESHOLD = 6 * 1024 * 1024
 
 function throwOnError(result) {
   if (result.error) throw result.error
@@ -58,24 +59,70 @@ export function validateVaultFile(file, { imagesOnly = false } = {}) {
   }
 }
 
+async function resumableUpload(path, file, accessToken) {
+  const { Upload } = await import('tus-js-client')
+  const url = new URL(supabaseUrl)
+  const hostname = url.hostname.endsWith('.supabase.co')
+    ? url.hostname.replace(/\.supabase\.co$/, '.storage.supabase.co')
+    : url.host
+  const endpoint = `${url.protocol}//${hostname}/storage/v1/upload/resumable`
+
+  return new Promise((resolve, reject) => {
+    const upload = new Upload(file, {
+      endpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-upsert': 'false',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      storeFingerprintForResuming: false,
+      metadata: {
+        bucketName: STORAGE_BUCKET,
+        objectName: path,
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+      },
+      chunkSize: RESUMABLE_UPLOAD_THRESHOLD,
+      onError: (error) => {
+        if (error.originalResponse?.getStatus() === 413) {
+          reject(new Error('Supabase rejected this file size. Increase the project-wide Storage upload limit to at least 100 MB and try again.'))
+          return
+        }
+        reject(error)
+      },
+      onSuccess: resolve,
+    })
+    upload.start()
+  })
+}
+
 export async function uploadVaultFile(file, familyId, folder) {
   validateVaultFile(file, { imagesOnly: folder.startsWith('profiles/') || folder.startsWith('passports/') })
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const { data: { session }, error: authError } = await supabase.auth.getSession()
   if (authError) throw authError
-  if (!user) throw new Error('Sign in before uploading files.')
+  if (!session) throw new Error('Sign in before uploading files.')
 
   const fileName = file.name.replace(/[^\w.-]/g, '_') || 'upload'
-  const path = `${user.id}/${familyId}/${folder}/${crypto.randomUUID()}-${fileName}`
-  const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
-    contentType: file.type || 'application/octet-stream',
-    upsert: false,
-  })
-  if (error) {
-    if (error.code === '42501' || /row-level security/i.test(error.message || '')) {
-      throw new Error('Supabase Storage blocked this upload. Run the latest supabase/schema.sql in the Supabase SQL Editor, then try again.')
+  const path = `${session.user.id}/${familyId}/${folder}/${crypto.randomUUID()}-${fileName}`
+  if (file.size > RESUMABLE_UPLOAD_THRESHOLD) {
+    await resumableUpload(path, file, session.access_token)
+  } else {
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
+      contentType: file.type || 'application/octet-stream',
+      upsert: false,
+    })
+    if (error) {
+      if (error.code === '42501' || /row-level security/i.test(error.message || '')) {
+        throw new Error('Supabase Storage blocked this upload. Run the latest supabase/schema.sql in the Supabase SQL Editor, then try again.')
+      }
+      if (error.statusCode === '413' || /payload too large/i.test(error.message || '')) {
+        throw new Error('Supabase rejected this file size. Check your project-wide Storage upload limit; it must allow files up to 100 MB.')
+      }
+      throw error
     }
-    throw error
   }
   const [url, downloadUrl] = await Promise.all([
     signedUrl(path),

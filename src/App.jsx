@@ -981,8 +981,6 @@ function MemberDetailsPage({ data, setData }) {
   const [showEditor, setShowEditor] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploading, setUploading] = useState(false)
-  const documentInputRef = useRef(null)
-  const photoInputRef = useRef(null)
   const [editingDocumentId, setEditingDocumentId] = useState('')
   const [editingDocumentName, setEditingDocumentName] = useState('')
   const [profilePhoto, setProfilePhoto] = useState(member?.profilePhoto || '')
@@ -1099,14 +1097,14 @@ function MemberDetailsPage({ data, setData }) {
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => setShowEditor((value) => !value)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white"><Pencil className="h-4 w-4" /> {showEditor ? 'Close Editor' : 'Edit Profile'}</button>
-            <button type="button" onClick={() => documentInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white disabled:opacity-60">
+            <label className={`relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
               <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload Document'}
-            </button>
-            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white disabled:opacity-60">
+              <input type="file" accept=".pdf,application/pdf,image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
+            </label>
+            <label className={`relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
               <Upload className="h-4 w-4" /> Profile Photo
-            </button>
-            <input ref={documentInputRef} type="file" accept=".pdf,image/*" className="sr-only" onChange={uploadDocument} />
-            <input ref={photoInputRef} type="file" accept="image/*" className="sr-only" onChange={uploadProfilePhoto} />
+              <input type="file" accept="image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadProfilePhoto} />
+            </label>
           </div>
         </div>
         {uploadError ? <p role="alert" className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uploadError}</p> : null}
@@ -1158,9 +1156,10 @@ function MemberDetailsPage({ data, setData }) {
       <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glass">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-xl font-semibold text-white">Member documents</h3>
-          <button type="button" onClick={() => documentInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white disabled:opacity-60">
+          <label className={`relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
             <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-          </button>
+            <input type="file" accept=".pdf,application/pdf,image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
+          </label>
         </div>
         <div className="grid gap-3">
           {memberDocs.length ? memberDocs.map((doc) => (
@@ -1234,7 +1233,6 @@ function CommonDocumentsPage({ data, setData }) {
   const [search, setSearch] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [uploading, setUploading] = useState(false)
-  const documentInputRef = useRef(null)
   const [editingDocumentId, setEditingDocumentId] = useState('')
   const [editingDocumentName, setEditingDocumentName] = useState('')
   const commonDocuments = data.documents.filter((document) => !document.memberId && !document.isDeleted)
@@ -1290,10 +1288,10 @@ function CommonDocumentsPage({ data, setData }) {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" placeholder="Search common docs" />
-            <button type="button" onClick={() => documentInputRef.current?.click()} disabled={uploading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+            <label className={`relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
               <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-            <input ref={documentInputRef} type="file" accept=".pdf,image/*" className="sr-only" onChange={uploadDocument} />
+              <input type="file" accept=".pdf,application/pdf,image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
+            </label>
           </div>
         </div>
         {uploadError ? <p role="alert" className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uploadError}</p> : null}

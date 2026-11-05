@@ -48,7 +48,7 @@ In the Supabase SQL Editor, run `supabase/schema.sql` to create/update the table
 
 When configured, the app loads and saves family members, documents, passports, and uploaded files directly to Supabase. Failed saves are shown in the app's sync status and can be retried. The browser-local demo store is only used when Supabase credentials are not configured.
 
-If Storage reports `new row violates row-level security policy`, rerun the latest `supabase/schema.sql` in the SQL Editor. Uploads use the private `family-documents` bucket and owner-scoped paths. Member/common document uploads support PDFs up to 100 MB and images up to 25 MB; passport scans and profile photos support images up to 25 MB. The bucket limit is 100 MB, so image uploads are limited by the app to 25 MB.
+If Storage reports `new row violates row-level security policy`, rerun the latest `supabase/schema.sql` in the SQL Editor. Uploads use the private `family-documents` bucket and owner-scoped paths. Member/common document uploads support PDFs up to 100 MB and images up to 25 MB; passport scans and profile photos support images up to 25 MB. Files larger than 6 MB use resumable uploads to better handle mobile and unstable network connections. The bucket limit is 100 MB, so image uploads are limited by the app to 25 MB. Set the Supabase project's global Storage file-size limit to at least 100 MB as well.
 
 Deleting a document permanently removes its database record and attempts to remove its file from the private Storage bucket.
 
