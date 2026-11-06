@@ -4,6 +4,23 @@ const STORAGE_BUCKET = 'family-documents'
 const MAX_DOCUMENT_SIZE = 100 * 1024 * 1024
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024
 const RESUMABLE_UPLOAD_THRESHOLD = 6 * 1024 * 1024
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|gif|bmp|svg|heic|heif|avif|tiff?)$/i
+
+function getContentType(file) {
+  if (file.type) return file.type
+  if (/\.pdf$/i.test(file.name)) return 'application/pdf'
+  if (/\.heic$/i.test(file.name)) return 'image/heic'
+  if (/\.heif$/i.test(file.name)) return 'image/heif'
+  if (/\.avif$/i.test(file.name)) return 'image/avif'
+  if (/\.jpe?g$/i.test(file.name)) return 'image/jpeg'
+  if (/\.png$/i.test(file.name)) return 'image/png'
+  if (/\.webp$/i.test(file.name)) return 'image/webp'
+  if (/\.gif$/i.test(file.name)) return 'image/gif'
+  if (/\.bmp$/i.test(file.name)) return 'image/bmp'
+  if (/\.tiff?$/i.test(file.name)) return 'image/tiff'
+  if (/\.svg$/i.test(file.name)) return 'image/svg+xml'
+  return 'application/octet-stream'
+}
 
 function throwOnError(result) {
   if (result.error) throw result.error
@@ -42,7 +59,7 @@ async function signedUrl(path, userId, options = {}) {
 
 export function validateVaultFile(file, { imagesOnly = false } = {}) {
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
-  const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(file.name)
+  const isImage = file.type.startsWith('image/') || IMAGE_EXTENSIONS.test(file.name)
 
   if (imagesOnly && !isImage) {
     throw new Error('Choose an image file.')
@@ -81,7 +98,7 @@ async function resumableUpload(path, file, accessToken) {
       metadata: {
         bucketName: STORAGE_BUCKET,
         objectName: path,
-        contentType: file.type || 'application/octet-stream',
+        contentType: getContentType(file),
         cacheControl: '3600',
       },
       chunkSize: RESUMABLE_UPLOAD_THRESHOLD,
@@ -111,7 +128,7 @@ export async function uploadVaultFile(file, familyId, folder) {
     await resumableUpload(path, file, session.access_token)
   } else {
     const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
-      contentType: file.type || 'application/octet-stream',
+      contentType: getContentType(file),
       upsert: false,
     })
     if (error) {

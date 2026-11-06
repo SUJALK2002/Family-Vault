@@ -83,7 +83,7 @@ function formatFileSize(bytes) {
 
 function getDetectedFileType(file) {
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return 'pdf'
-  if (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(file.name)) return 'image'
+  if (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|svg|heic|heif|avif|tiff?)$/i.test(file.name)) return 'image'
   return 'other'
 }
 
@@ -1099,11 +1099,11 @@ function MemberDetailsPage({ data, setData }) {
             <button type="button" onClick={() => setShowEditor((value) => !value)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white"><Pencil className="h-4 w-4" /> {showEditor ? 'Close Editor' : 'Edit Profile'}</button>
             <label className={`relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
               <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload Document'}
-              <input type="file" accept=".pdf,application/pdf,image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
+              <input type="file" accept=".pdf,application/pdf,image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
             </label>
             <label className={`relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
               <Upload className="h-4 w-4" /> Profile Photo
-              <input type="file" accept="image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadProfilePhoto} />
+              <input type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadProfilePhoto} />
             </label>
           </div>
         </div>
@@ -1158,7 +1158,7 @@ function MemberDetailsPage({ data, setData }) {
           <h3 className="text-xl font-semibold text-white">Member documents</h3>
           <label className={`relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
             <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-            <input type="file" accept=".pdf,application/pdf,image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
+            <input type="file" accept=".pdf,application/pdf,image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
           </label>
         </div>
         <div className="grid gap-3">
@@ -1290,7 +1290,7 @@ function CommonDocumentsPage({ data, setData }) {
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" placeholder="Search common docs" />
             <label className={`relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
               <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-              <input type="file" accept=".pdf,application/pdf,image/*" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
+              <input type="file" accept=".pdf,application/pdf,image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
             </label>
           </div>
         </div>
