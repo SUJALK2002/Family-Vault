@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Link,
@@ -64,11 +64,14 @@ const navItems = [
   { to: '/settings', label: 'Settings', icon: UserCog },
 ]
 
-function fileToDataUrl(file) {
+function fileToDataUrl(file, onProgress) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result)
     reader.onerror = () => reject(new Error('Failed to read file.'))
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100))
+    }
     reader.readAsDataURL(file)
   })
 }
@@ -96,6 +99,37 @@ function reportUploadError(error, setUploadError, prefix) {
   setUploadError(`${prefix}: ${message}`)
 }
 
+function FilePickerButton({ accept, disabled = false, onChange, className, children, label }) {
+  const inputId = useId()
+
+  return (
+    <>
+      <label
+        htmlFor={inputId}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={(event) => {
+          if (disabled || (event.key !== 'Enter' && event.key !== ' ')) return
+          event.preventDefault()
+          event.currentTarget.click()
+        }}
+        className={`${className} ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+      >
+        {children}
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept={accept}
+        aria-label={label}
+        disabled={disabled}
+        className="sr-only"
+        onChange={onChange}
+      />
+    </>
+  )
+}
+
 function buildStoredDocument({ file, documentName, memberId, familyId, category = 'Other', notes = '', isImportant = false }) {
   const safeName = (documentName || file.name || 'New Document').trim() || 'New Document'
   const fileType = getDetectedFileType(file)
@@ -119,16 +153,16 @@ function buildStoredDocument({ file, documentName, memberId, familyId, category 
   }
 }
 
-async function createDocumentUpload({ file, documentName, memberId, familyId, category, notes, isImportant, folder }) {
+async function createDocumentUpload({ file, documentName, memberId, familyId, category, notes, isImportant, folder, onProgress }) {
   validateVaultFile(file)
   const baseDoc = buildStoredDocument({ file, documentName, memberId, familyId, category, notes, isImportant, folder })
   if (isSupabaseConfigured && supabase) {
-    const upload = await uploadVaultFile(file, familyId, `documents/${memberId || 'common'}`)
+    const upload = await uploadVaultFile(file, familyId, `documents/${memberId || 'common'}`, { onProgress })
     baseDoc.storagePath = upload.path
     baseDoc.previewUrl = upload.url
     baseDoc.downloadUrl = upload.downloadUrl
   } else {
-    baseDoc.previewUrl = await fileToDataUrl(file)
+    baseDoc.previewUrl = await fileToDataUrl(file, onProgress)
   }
 
   return baseDoc
@@ -980,6 +1014,8 @@ function MemberDetailsPage({ data, setData }) {
   const [selectedDoc, setSelectedDoc] = useState(null)
   const [showEditor, setShowEditor] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [uploadMessage, setUploadMessage] = useState('')
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [editingDocumentId, setEditingDocumentId] = useState('')
   const [editingDocumentName, setEditingDocumentName] = useState('')
@@ -1022,6 +1058,8 @@ function MemberDetailsPage({ data, setData }) {
     if (!file) return
 
     setUploadError('')
+    setUploadMessage('')
+    setUploadProgress(0)
     setUploading(true)
     try {
       const doc = await createDocumentUpload({
@@ -1033,8 +1071,11 @@ function MemberDetailsPage({ data, setData }) {
         notes: '',
         isImportant: false,
         folder: 'member',
+        onProgress: setUploadProgress,
       })
       setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
+      setUploadProgress(100)
+      setUploadMessage(`${file.name} uploaded successfully.`)
     } catch (error) {
       reportUploadError(error, setUploadError, 'Upload failed')
     } finally {
@@ -1048,12 +1089,14 @@ function MemberDetailsPage({ data, setData }) {
     if (!file) return
 
     setUploadError('')
+    setUploadMessage('')
+    setUploadProgress(0)
     setUploading(true)
     try {
       validateVaultFile(file, { imagesOnly: true })
       const photo = isSupabaseConfigured
-        ? await uploadVaultFile(file, data.family.id, `profiles/${memberId}`)
-        : { path: '', url: await fileToDataUrl(file) }
+        ? await uploadVaultFile(file, data.family.id, `profiles/${memberId}`, { onProgress: setUploadProgress })
+        : { path: '', url: await fileToDataUrl(file, setUploadProgress) }
       setProfilePhoto(photo.url)
       setData((current) => ({
         ...current,
@@ -1061,6 +1104,8 @@ function MemberDetailsPage({ data, setData }) {
           ? { ...entry, profilePhoto: photo.url, profilePhotoPath: photo.path, updatedAt: new Date().toISOString() }
           : entry)),
       }))
+      setUploadProgress(100)
+      setUploadMessage(`${file.name} uploaded successfully.`)
     } catch (error) {
       reportUploadError(error, setUploadError, 'Photo upload failed')
     } finally {
@@ -1097,17 +1142,34 @@ function MemberDetailsPage({ data, setData }) {
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => setShowEditor((value) => !value)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white"><Pencil className="h-4 w-4" /> {showEditor ? 'Close Editor' : 'Edit Profile'}</button>
-            <label className={`relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-              <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload Document'}
-              <input type="file" accept=".pdf,application/pdf,image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
-            </label>
-            <label className={`relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+            <FilePickerButton
+              accept="application/pdf,image/*,.pdf,.heic,.heif,.avif,.tif,.tiff"
+              disabled={uploading}
+              onChange={uploadDocument}
+              label="Upload a PDF or image document"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+              <Upload className="h-4 w-4" /> {uploading ? `Uploading ${uploadProgress}%` : 'Upload Document'}
+            </FilePickerButton>
+            <FilePickerButton
+              accept="image/*,.heic,.heif,.avif,.tif,.tiff"
+              disabled={uploading}
+              onChange={uploadProfilePhoto}
+              label="Upload profile photo"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
               <Upload className="h-4 w-4" /> Profile Photo
-              <input type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadProfilePhoto} />
-            </label>
+            </FilePickerButton>
           </div>
         </div>
         {uploadError ? <p role="alert" className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uploadError}</p> : null}
+        {uploadMessage ? <p role="status" className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{uploadMessage}</p> : null}
+        {uploading ? (
+          <div className="space-y-1" role="status" aria-live="polite">
+            <p className="text-sm text-slate-300">Uploading… {uploadProgress}%</p>
+            <progress value={uploadProgress} max="100" aria-label="Upload progress" className="h-2 w-full accent-red-500" />
+          </div>
+        ) : null}
       </div>
 
       {showEditor ? (
@@ -1156,10 +1218,15 @@ function MemberDetailsPage({ data, setData }) {
       <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glass">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-xl font-semibold text-white">Member documents</h3>
-          <label className={`relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-            <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-            <input type="file" accept=".pdf,application/pdf,image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
-          </label>
+          <FilePickerButton
+            accept="application/pdf,image/*,.pdf,.heic,.heif,.avif,.tif,.tiff"
+            disabled={uploading}
+            onChange={uploadDocument}
+            label="Upload a PDF or image document"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-action-gradient px-3 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+          >
+            <Upload className="h-4 w-4" /> {uploading ? `Uploading ${uploadProgress}%` : 'Upload'}
+          </FilePickerButton>
         </div>
         <div className="grid gap-3">
           {memberDocs.length ? memberDocs.map((doc) => (
@@ -1232,6 +1299,8 @@ function MemberDetailsPage({ data, setData }) {
 function CommonDocumentsPage({ data, setData }) {
   const [search, setSearch] = useState('')
   const [uploadError, setUploadError] = useState('')
+  const [uploadMessage, setUploadMessage] = useState('')
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [editingDocumentId, setEditingDocumentId] = useState('')
   const [editingDocumentName, setEditingDocumentName] = useState('')
@@ -1243,6 +1312,8 @@ function CommonDocumentsPage({ data, setData }) {
     if (!file) return
 
     setUploadError('')
+    setUploadMessage('')
+    setUploadProgress(0)
     setUploading(true)
     try {
       const doc = await createDocumentUpload({
@@ -1254,8 +1325,11 @@ function CommonDocumentsPage({ data, setData }) {
         notes: 'Family shared document',
         isImportant: false,
         folder: 'common',
+        onProgress: setUploadProgress,
       })
       setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
+      setUploadProgress(100)
+      setUploadMessage(`${file.name} uploaded successfully.`)
     } catch (error) {
       reportUploadError(error, setUploadError, 'Upload failed')
     } finally {
@@ -1288,13 +1362,25 @@ function CommonDocumentsPage({ data, setData }) {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2.5 text-white" placeholder="Search common docs" />
-            <label className={`relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white ${uploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-              <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload'}
-              <input type="file" accept=".pdf,application/pdf,image/*,.heic,.heif,.avif,.tif,.tiff" disabled={uploading} className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" onChange={uploadDocument} />
-            </label>
+            <FilePickerButton
+              accept="application/pdf,image/*,.pdf,.heic,.heif,.avif,.tif,.tiff"
+              disabled={uploading}
+              onChange={uploadDocument}
+              label="Upload a PDF or image document"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-action-gradient px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+              <Upload className="h-4 w-4" /> {uploading ? `Uploading ${uploadProgress}%` : 'Upload'}
+            </FilePickerButton>
           </div>
         </div>
         {uploadError ? <p role="alert" className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uploadError}</p> : null}
+        {uploadMessage ? <p role="status" className="mt-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{uploadMessage}</p> : null}
+        {uploading ? (
+          <div className="mt-4 space-y-1" role="status" aria-live="polite">
+            <p className="text-sm text-slate-300">Uploading… {uploadProgress}%</p>
+            <progress value={uploadProgress} max="100" aria-label="Upload progress" className="h-2 w-full accent-red-500" />
+          </div>
+        ) : null}
       </div>
 
       <div className="mx-auto grid w-full max-w-5xl gap-3 sm:gap-4">
