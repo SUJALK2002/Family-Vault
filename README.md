@@ -1,4 +1,4 @@
-# Family Document Vault
+# KVault
 
 A premium family document management application built with React, Vite, Tailwind CSS, and Supabase-ready architecture.
 

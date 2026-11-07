@@ -29,7 +29,6 @@ import {
   Pencil,
   Plus,
   Search,
-  ShieldCheck,
   Trash2,
   Upload,
   UserCog,
@@ -43,6 +42,10 @@ import { isSupabaseConfigured, supabase } from './lib/supabase.js'
 import { loadFamilyVault, persistVaultChanges, uploadVaultFile, validateVaultFile } from './lib/vault.js'
 
 const STORAGE_KEY = 'family-vault-data'
+
+function BrandMark({ className = '' }) {
+  return <span aria-hidden="true" className={`font-bold leading-none text-white ${className}`}>K</span>
+}
 
 function getInitialData() {
   if (typeof window === 'undefined') return seedData
@@ -359,11 +362,11 @@ function LoginPage() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(227,38,54,0.25),transparent_30%)]" />
             <div className="relative z-10 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-action-gradient shadow-lg shadow-red-500/20">
-                <ShieldCheck className="h-6 w-6 text-white" />
+                <BrandMark className="text-2xl" />
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-300">Private vault</p>
-                <h1 className="text-2xl font-semibold">Family Document Vault</h1>
+                <h1 className="text-2xl font-semibold">KVault</h1>
               </div>
             </div>
 
@@ -393,11 +396,11 @@ function LoginPage() {
             <div className="mb-8 flex items-center justify-between lg:hidden">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-action-gradient shadow-lg shadow-red-500/20">
-                  <ShieldCheck className="h-5 w-5 text-white" />
+                  <BrandMark className="text-xl" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400">Vault</p>
-                  <h1 className="text-lg font-semibold">Family Document Vault</h1>
+                  <h1 className="text-lg font-semibold">KVault</h1>
                 </div>
               </div>
             </div>
@@ -602,11 +605,11 @@ function AppLayout({
         <aside className="hidden w-72 border-r border-white/10 bg-[#171a1f]/90 px-5 py-6 lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3 px-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-action-gradient">
-              <ShieldCheck className="h-5 w-5 text-white" />
+              <BrandMark className="text-xl" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">Family vault</p>
-              <h1 className="text-lg font-semibold">Family Document Vault</h1>
+              <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">Private vault</p>
+              <h1 className="text-lg font-semibold">KVault</h1>
             </div>
           </div>
 
@@ -654,7 +657,7 @@ function AppLayout({
                 </button>
                 <div>
                   <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Good {getGreeting()}</p>
-                  <h2 className="text-xl font-semibold text-white">Family vault</h2>
+                  <h2 className="text-xl font-semibold text-white">KVault</h2>
                 </div>
               </div>
 
