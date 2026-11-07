@@ -657,7 +657,7 @@ function AppLayout({
                 </button>
                 <div>
                   <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Good {getGreeting()}</p>
-                  <h2 className="text-xl font-semibold text-white">KVault</h2>
+                  <h2 className="text-xl font-semibold text-white">KALAMKAR VAULT</h2>
                 </div>
               </div>
 
