@@ -4,10 +4,12 @@ const STORAGE_BUCKET = 'family-documents'
 const MAX_DOCUMENT_SIZE = 100 * 1024 * 1024
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024
 const RESUMABLE_UPLOAD_CHUNK_SIZE = 6 * 1024 * 1024
+const RESUMABLE_UPLOAD_THRESHOLD = 10 * 1024 * 1024
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|gif|bmp|svg|heic|heif|avif|tiff?)$/i
 
 function getContentType(file) {
-  if (file.type && file.type !== 'application/octet-stream') return file.type
+  const fileType = typeof file.type === 'string' ? file.type.toLowerCase() : ''
+  if (fileType && fileType !== 'application/octet-stream') return fileType
   if (/\.pdf$/i.test(file.name)) return 'application/pdf'
   if (/\.heic$/i.test(file.name)) return 'image/heic'
   if (/\.heif$/i.test(file.name)) return 'image/heif'
@@ -58,8 +60,10 @@ async function signedUrl(path, userId, options = {}) {
 }
 
 export function validateVaultFile(file, { imagesOnly = false } = {}) {
-  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
-  const isImage = file.type.startsWith('image/') || IMAGE_EXTENSIONS.test(file.name)
+  const fileType = typeof file.type === 'string' ? file.type.toLowerCase() : ''
+  const fileName = typeof file.name === 'string' ? file.name : ''
+  const isPdf = fileType === 'application/pdf' || fileType === 'application/x-pdf' || /\.pdf$/i.test(fileName)
+  const isImage = fileType.startsWith('image/') || IMAGE_EXTENSIONS.test(fileName)
 
   if (imagesOnly && !isImage) {
     throw new Error('Choose an image file.')
@@ -74,6 +78,39 @@ export function validateVaultFile(file, { imagesOnly = false } = {}) {
     error.code = 'FILE_TOO_LARGE'
     throw error
   }
+}
+
+function getStorageErrorDetails(error) {
+  const response = error.originalResponse
+  const responseBody = response?.getBody?.() || ''
+  let responseMessage = ''
+  if (responseBody) {
+    try {
+      const parsed = JSON.parse(responseBody)
+      responseMessage = parsed.message || parsed.error || ''
+    } catch {
+      responseMessage = responseBody
+    }
+  }
+
+  return {
+    status: response?.getStatus?.() || Number(error.status) || Number(error.statusCode) || undefined,
+    code: error.statusCode || error.code || '',
+    message: responseMessage || error.message || 'Unknown Storage error',
+    responseBody,
+    storageError: error.error || error.name || '',
+    details: error.details || '',
+  }
+}
+
+function createStorageUploadError(error, details) {
+  if (details.status === 413 || /payload too large|maximum allowed size|file size/i.test(details.message)) {
+    return new Error(`Supabase Storage rejected the file size. Check the project's global Storage upload limit (it must be at least 100 MB) and the bucket limit. Storage response: ${details.message}`)
+  }
+  if (details.status === 401 || details.status === 403 || /row-level security|unauthorized|forbidden/i.test(details.message)) {
+    return new Error(`Supabase Storage denied this upload. Check the signed-in session and existing family Storage RLS policies. Storage response: ${details.message}`)
+  }
+  return new Error(`Supabase Storage upload failed${details.status ? ` (${details.status})` : ''}: ${details.message}`, { cause: error })
 }
 
 async function resumableUpload(path, file, accessToken, onProgress) {
@@ -105,13 +142,7 @@ async function resumableUpload(path, file, accessToken, onProgress) {
       onProgress: (bytesUploaded, bytesTotal) => {
         if (bytesTotal > 0) onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100))
       },
-      onError: (error) => {
-        if (error.originalResponse?.getStatus() === 413) {
-          reject(new Error('Supabase rejected this file size. Increase the project-wide Storage upload limit to at least 100 MB and try again.'))
-          return
-        }
-        reject(error)
-      },
+      onError: reject,
       onSuccess: (result) => {
         onProgress?.(100)
         resolve(result)
@@ -131,21 +162,37 @@ export async function uploadVaultFile(file, familyId, folder, { onProgress } = {
   const fileName = file.name.replace(/[^\w.-]/g, '_') || 'upload'
   const path = `${session.user.id}/${familyId}/${folder}/${crypto.randomUUID()}-${fileName}`
   try {
-    await resumableUpload(path, file, session.access_token, onProgress)
+    if (file.size > RESUMABLE_UPLOAD_THRESHOLD) {
+      await resumableUpload(path, file, session.access_token, onProgress)
+    } else {
+      const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
+        contentType: getContentType(file),
+        upsert: false,
+      })
+      if (error) throw error
+      onProgress?.(100)
+    }
+
+    const [url, downloadUrl] = await Promise.all([
+      signedUrl(path),
+      signedUrl(path, undefined, { download: file.name }),
+    ])
+    return { path, url, downloadUrl }
   } catch (error) {
-    if (error.originalResponse?.getStatus() === 413 || error.statusCode === '413' || /payload too large/i.test(error.message || '')) {
-      throw new Error('Supabase rejected this file size. Check your project-wide Storage upload limit; it must allow files up to 100 MB.')
-    }
-    if (error.statusCode === '403' || error.statusCode === '401' || /row-level security|unauthorized|forbidden/i.test(error.message || '')) {
-      throw new Error('Supabase Storage blocked this upload. Check the family storage policies and sign-in session, then try again.')
-    }
-    throw error
+    const details = getStorageErrorDetails(error)
+    console.error('Supabase Storage upload failed.', {
+      fileName: file.name,
+      fileSizeBytes: file.size,
+      contentType: getContentType(file),
+      storageStatus: details.status,
+      storageCode: details.code,
+      storageMessage: details.message,
+      storageError: details.storageError,
+      details: details.details,
+      responseBody: details.responseBody,
+    })
+    throw createStorageUploadError(error, details)
   }
-  const [url, downloadUrl] = await Promise.all([
-    signedUrl(path),
-    signedUrl(path, undefined, { download: file.name }),
-  ])
-  return { path, url, downloadUrl }
 }
 
 export async function loadFamilyVault(user) {

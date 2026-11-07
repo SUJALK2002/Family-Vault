@@ -191,14 +191,15 @@ function App() {
   const commitVaultData = useCallback((update) => {
     const previous = vaultRef.current
     const next = typeof update === 'function' ? update(previous) : update
-    if (!next || next === previous) return
+    if (!next || next === previous) return Promise.resolve(true)
     vaultRef.current = next
     setVaultData(next)
 
-    if (!isSupabaseConfigured || !databaseReadyRef.current) return
+    if (!isSupabaseConfigured) return Promise.resolve(true)
+    if (!databaseReadyRef.current) return Promise.resolve(false)
     setDatabaseStatus('saving')
     setDatabaseError('')
-    pendingWritesRef.current = pendingWritesRef.current
+    const savePromise = pendingWritesRef.current
       .then(async () => {
         const synced = syncedVaultRef.current || { family: next.family, members: [], documents: [], passports: [] }
         await persistVaultChanges(synced, next)
@@ -207,12 +208,16 @@ function App() {
           setDatabaseError('')
           setDatabaseStatus('saved')
         }
+        return true
       })
       .catch((error) => {
         console.error('Failed to save vault data to Supabase:', error)
         setDatabaseStatus('error')
         setDatabaseError(error.message || 'Could not save your changes to Supabase.')
+        return false
       })
+    pendingWritesRef.current = savePromise
+    return savePromise
   }, [])
 
   const setDatabaseReady = useCallback((ready) => {
@@ -1073,7 +1078,10 @@ function MemberDetailsPage({ data, setData }) {
         folder: 'member',
         onProgress: setUploadProgress,
       })
-      setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
+      const saved = await setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
+      if (saved === false) {
+        throw new Error('The file uploaded to Storage, but its document record could not be saved to the database. Check the sync error and retry saving.')
+      }
       setUploadProgress(100)
       setUploadMessage(`${file.name} uploaded successfully.`)
     } catch (error) {
@@ -1098,12 +1106,15 @@ function MemberDetailsPage({ data, setData }) {
         ? await uploadVaultFile(file, data.family.id, `profiles/${memberId}`, { onProgress: setUploadProgress })
         : { path: '', url: await fileToDataUrl(file, setUploadProgress) }
       setProfilePhoto(photo.url)
-      setData((current) => ({
+      const saved = await setData((current) => ({
         ...current,
         members: current.members.map((entry) => (entry.id === memberId
           ? { ...entry, profilePhoto: photo.url, profilePhotoPath: photo.path, updatedAt: new Date().toISOString() }
           : entry)),
       }))
+      if (saved === false) {
+        throw new Error('The photo uploaded to Storage, but its profile record could not be saved to the database. Check the sync error and retry saving.')
+      }
       setUploadProgress(100)
       setUploadMessage(`${file.name} uploaded successfully.`)
     } catch (error) {
@@ -1167,7 +1178,7 @@ function MemberDetailsPage({ data, setData }) {
         {uploading ? (
           <div className="space-y-1" role="status" aria-live="polite">
             <p className="text-sm text-slate-300">Uploading… {uploadProgress}%</p>
-            <progress value={uploadProgress} max="100" aria-label="Upload progress" className="h-2 w-full accent-red-500" />
+            <progress value={uploadProgress || undefined} max="100" aria-label="Upload progress" className="h-2 w-full accent-red-500" />
           </div>
         ) : null}
       </div>
@@ -1327,7 +1338,10 @@ function CommonDocumentsPage({ data, setData }) {
         folder: 'common',
         onProgress: setUploadProgress,
       })
-      setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
+      const saved = await setData((current) => ({ ...current, documents: [doc, ...current.documents] }))
+      if (saved === false) {
+        throw new Error('The file uploaded to Storage, but its document record could not be saved to the database. Check the sync error and retry saving.')
+      }
       setUploadProgress(100)
       setUploadMessage(`${file.name} uploaded successfully.`)
     } catch (error) {
@@ -1378,7 +1392,7 @@ function CommonDocumentsPage({ data, setData }) {
         {uploading ? (
           <div className="mt-4 space-y-1" role="status" aria-live="polite">
             <p className="text-sm text-slate-300">Uploading… {uploadProgress}%</p>
-            <progress value={uploadProgress} max="100" aria-label="Upload progress" className="h-2 w-full accent-red-500" />
+            <progress value={uploadProgress || undefined} max="100" aria-label="Upload progress" className="h-2 w-full accent-red-500" />
           </div>
         ) : null}
       </div>
