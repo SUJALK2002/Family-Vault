@@ -14,7 +14,8 @@ A premium family document management application built with React, Vite, Tailwin
 - Supabase-backed family, member, document, and passport records
 - Private Supabase Storage uploads for documents, profile photos, and passport images
 - Realtime updates across signed-in clients
-- Local demo persistence when Supabase credentials are not configured
+- In-memory demo authentication when Supabase credentials are not configured
+- Sign in again whenever the app is reopened or reloaded; authentication sessions are not persisted
 
 ## Run locally
 
@@ -45,6 +46,8 @@ Then set:
 - `VITE_SUPABASE_ANON_KEY`
 
 In the Supabase SQL Editor, run `supabase/schema.sql` to create/update the tables, row-level security and storage policies, private `family-documents` bucket, and Realtime publication. The app creates a family row for the signed-in user if one does not already exist.
+
+Authentication is kept in memory only. Closing or reloading the app ends the session, so users must sign in again. Passwords and authentication sessions are not saved in browser storage.
 
 When configured, the app loads and saves family members, documents, passports, and uploaded files directly to Supabase. Failed saves are shown in the app's sync status and can be retried. The browser-local demo store is only used when Supabase credentials are not configured.
 

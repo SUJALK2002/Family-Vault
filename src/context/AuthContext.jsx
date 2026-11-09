@@ -1,39 +1,45 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
+import { isSupabaseConfigured, supabase, supabaseAuthStorageKey } from '../lib/supabase.js'
 
 const AuthContext = createContext(null)
-const STORAGE_KEY = 'family-vault-auth'
-
-function getStoredUser() {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return null
-
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
+const LEGACY_STORAGE_KEY = 'family-vault-auth'
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => getStoredUser())
+  const [user, setUser] = useState(null)
+  const [isLoading, setIsLoading] = useState(isSupabaseConfigured)
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem(LEGACY_STORAGE_KEY)
+      localStorage.removeItem(supabaseAuthStorageKey)
+    } catch (error) {
+      console.error('Failed to clear previously saved authentication data:', error)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      if (user) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-      } else {
-        localStorage.removeItem(STORAGE_KEY)
-      }
+      setIsLoading(false)
       return
     }
 
     let active = true
 
     async function syncSession() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!active) return
-      setUser(session?.user ?? null)
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('Failed to check the in-memory authentication session:', error)
+          if (active) setUser(null)
+        } else if (active) {
+          setUser(session?.user ?? null)
+        }
+      } catch (error) {
+        console.error('Failed to check the in-memory authentication session:', error)
+        if (active) setUser(null)
+      } finally {
+        if (active) setIsLoading(false)
+      }
     }
 
     syncSession()
@@ -41,6 +47,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) {
         setUser(session?.user ?? null)
+        setIsLoading(false)
       }
     })
 
@@ -50,15 +57,7 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-    } else if (!isSupabaseConfigured) {
-      localStorage.removeItem(STORAGE_KEY)
-    }
-  }, [user])
-
-  const login = async ({ email, password, rememberMe }) => {
+  const login = async ({ email, password }) => {
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
@@ -70,7 +69,6 @@ export function AuthProvider({ children }) {
       email,
       name: 'Family Owner',
       isAuthenticated: true,
-      rememberMe,
       loggedInAt: new Date().toISOString(),
     }
 
@@ -97,8 +95,8 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, login, logout, resetPassword }),
-    [user],
+    () => ({ user, isLoading, login, logout, resetPassword }),
+    [user, isLoading],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

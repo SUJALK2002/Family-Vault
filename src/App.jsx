@@ -287,13 +287,22 @@ function App() {
 }
 
 function ProtectedRoute({ children }) {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const location = useLocation()
+  if (isLoading) return <AuthLoading />
   return user ? children : <Navigate to="/login" replace state={{ from: location }} />
 }
 
+function AuthLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-hero-gradient px-4 text-slate-200" role="status">
+      Checking your session...
+    </div>
+  )
+}
+
 function LoginPage() {
-  const { user, login, resetPassword } = useAuth()
+  const { user, isLoading, login, resetPassword } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const redirectPath = location.state?.from?.pathname?.startsWith('/')
@@ -302,16 +311,15 @@ function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    if (user) {
+    if (!isLoading && user) {
       navigate(redirectPath, { replace: true })
     }
-  }, [user, navigate, redirectPath])
+  }, [user, isLoading, navigate, redirectPath])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -325,7 +333,7 @@ function LoginPage() {
     setLoading(true)
 
     try {
-      await login({ email: email.trim(), password: password.trim(), rememberMe })
+      await login({ email: email.trim(), password: password.trim() })
       navigate(redirectPath, { replace: true })
     } catch (submitError) {
       setError(submitError?.message || 'Unable to sign in with the provided family credentials.')
@@ -353,6 +361,8 @@ function LoginPage() {
       setLoading(false)
     }
   }
+
+  if (isLoading) return <AuthLoading />
 
   return (
     <div className="min-h-screen bg-hero-gradient px-3 py-5 text-white sm:px-6 sm:py-10">
@@ -412,7 +422,7 @@ function LoginPage() {
                 <p className="mt-2 text-sm leading-6 text-slate-400 sm:text-base">Sign in to access your family profiles and document vault.</p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+              <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4 sm:space-y-5">
                 <div>
                   <label className="mb-2 block text-sm text-slate-300" htmlFor="family-email">Family Login ID / Email</label>
                   <input
@@ -433,7 +443,7 @@ function LoginPage() {
                     <input
                       id="family-password"
                       type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
+                      autoComplete="off"
                       required
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
@@ -451,16 +461,7 @@ function LoginPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 text-sm text-slate-300">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(event) => setRememberMe(event.target.checked)}
-                      className="h-4 w-4 rounded border-white/10 bg-slate-900 text-red-500"
-                    />
-                    Remember me
-                  </label>
+                <div className="flex justify-end text-sm text-slate-300">
                   <button type="button" onClick={handleForgotPassword} className="font-medium text-red-400 hover:text-red-300">
                     Forgot Password?
                   </button>
